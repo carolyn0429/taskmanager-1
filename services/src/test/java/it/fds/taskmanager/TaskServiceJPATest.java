@@ -7,6 +7,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -16,13 +17,10 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 import static org.mockito.Matchers.isA;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 /**
  * Basic test suite to test the service layer, it uses an in-memory H2 database. 
@@ -45,6 +43,7 @@ public class TaskServiceJPATest extends Assert{
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
+
     }
     @Test
     public void writeAndReadOnDB() {
@@ -97,43 +96,138 @@ public class TaskServiceJPATest extends Assert{
     }
 
     @Test
-    public void saveTaskStoresTaskSuccessfully() {
+    public void saveTaskSuccessfully() {
+
         // Arrange
-        final UUID uuid = UUID.randomUUID();
-        final TaskDTO taskDto = new TaskDTO();
-        final Task newTask = new Task();
-        newTask.setUuid(uuid);
-        newTask.setDescription("Test One");
-        taskDto.setDescription("Test One");
-        taskDto.setUuid(uuid);
-        taskDto.setPriority("High");
-        when(tasksRepositoryMock.save(isA(Task.class))).thenReturn(newTask);
+        final TaskDTO task = new TaskDTO();
+        task.setStatus(TaskState.NEW.name().toString());
+        task.setDescription("test description");
+        task.setTitle("test title");
+        final Task newTaskMock = new Task();
+        newTaskMock.setDescription("test description");
+        newTaskMock.setTitle("test title");
+        newTaskMock.setStatus(TaskState.NEW.name().toString());
+        when(tasksRepositoryMock.save(any(Task.class))).thenReturn(newTaskMock);
+        ArgumentCaptor<Task> taskCaptor = ArgumentCaptor.forClass(Task.class);
 
         // Act
-        final TaskDTO actualTaskDto = taskServiceJPA.saveTask(taskDto);
+        final TaskDTO actualTaskDto = taskServiceJPA.saveTask(task);
 
         // Assert
+        verify(tasksRepositoryMock, times(1)).save(taskCaptor.capture());
         assertNotNull(actualTaskDto);
-        assertSame(actualTaskDto.getUuid(), taskDto.getUuid());
-        assertEquals(actualTaskDto.getDescription(), taskDto.getDescription());
+        Task taskCaptured = taskCaptor.getValue();
+        assertNotNull(taskCaptured);
+        assertSame(actualTaskDto.getUuid(), taskCaptured.getUuid().toString()); //actualTaskDto's uuid is not copied over
     }
 
     @Test
-    public void updateTaskReturnsUpdatedTaskSuccessfully() {
+    public void updateTaskSuccessfully() {
         // Arrange
-        final TaskDTO taskDTO = new TaskDTO();
-        final Task newTask = new Task();
         final UUID uuid = UUID.randomUUID();
-        taskDTO.setUuid(uuid);
-        taskDTO.setDescription("Old description");
-        taskDTO.setCreatedat(Calendar.getInstance());
+        final TaskDTO task = new TaskDTO();
+        task.setUuid(uuid);
+        task.setDescription("test description");
+        task.setTitle("test title");
+        task.setStatus(TaskState.NEW.name().toString());
+        task.setUpdatedat(null);
+        final Task newTask = new Task();
+        newTask.setUuid(uuid);
+        newTask.setDescription("test description");
+        newTask.setTitle("test title");
+        newTask.setStatus(TaskState.NEW.name().toString());
         when(tasksRepositoryMock.save(isA(Task.class))).thenReturn(newTask);
+        ArgumentCaptor<Task> taskCaptor = ArgumentCaptor.forClass(Task.class);
 
         // Act
-        final TaskDTO actualTaskDto = taskServiceJPA.updateTask(taskDTO);
+        final TaskDTO actualTaskDto = taskServiceJPA.updateTask(task);
 
         // Assert
+        verify(tasksRepositoryMock, times(1)).save(taskCaptor.capture());
         assertNotNull(actualTaskDto);
+        Task taskCaptured = taskCaptor.getValue();
+        assertNotNull(taskCaptured);
+        assertNotNull(taskCaptured.getUpdatedat());
+        assertEquals("test description", actualTaskDto.getDescription());
+        assertEquals("test title", actualTaskDto.getTitle());
+        assertNotNull(actualTaskDto.getUuid());
+    }
+
+
+    @Test
+    public void resolveTaskReturnsTrueWhenTaskIsResolved(){
+        // Arrange
+        final Task task = new Task();
+        final UUID uuid = UUID.randomUUID();
+        task.setUuid(uuid);
+        task.setTitle("test title");
+        task.setDescription("test description");
+
+        when(tasksRepositoryMock.findByUuid(uuid)).thenReturn(task);
+
+        // Act
+        final Boolean actualIsResolved = taskServiceJPA.resolveTask(uuid);
+
+        // Assert
+        assertTrue(actualIsResolved);
+    }
+
+    @Test
+    public void postponeTaskReturnsTrueWhenTimeIsAddedSuccessfully() {
+        // Arrange
+        final Task task = new Task();
+        final Integer timeInMinute = 25;
+        final UUID uuid = UUID.randomUUID();
+        task.setUuid(uuid);
+        task.setTitle("test title");
+        task.setDescription("test description");
+
+        when(tasksRepositoryMock.findByUuid(uuid)).thenReturn(task);
+
+        // Act
+        final Boolean actualIsPostponed = taskServiceJPA.postponeTask(uuid, timeInMinute);
+
+        // Assert
+        assertTrue(actualIsPostponed);
+    }
+
+    @Test
+    public void unmarkPostponedTaskReturnsStateRestoredSuccessfully() {
+        // Arrange
+
+        final Task task1 = new Task();
+        final UUID uuid1 = UUID.randomUUID();
+        task1.setUuid(uuid1);
+        task1.setTitle("task1 title");
+        task1.setDescription("task1 description");
+        task1.setPostponedat(Calendar.getInstance());
+        task1.setStatus(TaskState.POSTPONED.name().toString());
+
+        final Task task2 = new Task();
+        final UUID uuid2 = UUID.randomUUID();
+        task2.setUuid(uuid2);
+        task2.setTitle("task2 title");
+        task2.setDescription("task2 description");
+        task2.setPostponedat(Calendar.getInstance());
+        task2.setStatus(TaskState.POSTPONED.name().toString());
+
+        final List<Task> taskList = Arrays.asList(task1, task2);
+        when(tasksRepositoryMock.findTaskToRestore()).thenReturn(taskList);
+        ArgumentCaptor<Task> taskCaptor = ArgumentCaptor.forClass(Task.class);
+
+        // Act
+        taskServiceJPA.unmarkPostoned();
+
+        // Assert
+        verify(tasksRepositoryMock, times(2)).save(taskCaptor.capture());
+        final List<Task> actualTaskList = taskCaptor.getAllValues();
+        assertNotNull(actualTaskList);
+        assertEquals(2, actualTaskList.size());
+        for (Task task : actualTaskList) {
+            assertEquals("RESTORED", task.getStatus());
+            assertNull(task.getPostponedat());
+        }
+
     }
 
     @EnableJpaRepositories
