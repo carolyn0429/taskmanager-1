@@ -1,10 +1,16 @@
 ### Jmeter load test###
 how to load jmeter script:
-1. start jmeter locally
-2. open 'taskmanager_test.jmx' jmeter project from jmeter
-3. expand project structure, go to 'Thread Group', configure # of threads, ramp-up time and loop counts.
-4. click green play button on the top to run the load test.
-5. see graph on 'Graph_taskmanager' tab.
+
+1. pre-run scheduler and store data entries >1000 into task table
+2. pg_dump table into task_1000_entries_table_backup file
+3. open http://localhost:8080
+4. psql restore table data into task table.
+5. data will start showing up in http://localhost:8080 endpoint
+6. start jmeter locally
+7. open 'taskmanager_test.jmx' jmeter project from jmeter
+8. expand project structure, go to 'Thread Group', configure # of threads, ramp-up time and loop counts.
+9. click green play button on the top to run the load test.
+10. see graph on 'Graph_taskmanager' tab.
 
 with 100 threads,
 ramp-up time in 1000 seconds, and loop counts 10, the throughput is 60/minutes
